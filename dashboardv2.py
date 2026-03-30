@@ -10,6 +10,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import date, datetime
 from typing import Optional
+from plotly.subplots import make_subplots
 
 # ====================== 基础配置 ======================
 st.set_page_config(page_title="宏观指标监控仪表盘", layout="wide")
@@ -45,6 +46,18 @@ INDICATORS = {
         "color": "#2ca02c",
         "source": "fred",
     },
+    "DTWEXBGS": {
+        "name": "美元指数（Nominal Broad）",
+        "desc": "Nominal Broad U.S. Dollar Index",
+        "color": "#f58518",
+        "source": "fred",
+        },
+    "T10Y2Y": {
+        "name": "10Y-2Y利差",
+        "desc": "10年期国债收益率减2年期国债收益率",
+        "color": "#54a24b",
+        "source": "fred",
+        },
     "BAMLH0A0HYM2": {
         "name": "高收益债OAS",
         "desc": "信用利差，越高信用风险越大",
@@ -75,7 +88,108 @@ INDICATORS = {
         "color": "#7f7f7f",
         "source": "fred",
     },
-    "SP500": {"name": "S&P500", "desc": "衡量美国大盘股表现的核心指数", "color": "#17becf", "source": "fred"},
+    "SP500": {
+        "name": "S&P500",
+        "desc": "衡量美国大盘股表现的核心指数",
+        "color": "#17becf",
+        "source": "fred",
+    },
+
+    # ===== 通胀 / PCE =====
+    "CPIAUCSL": {
+        "name": "美国CPI同比",
+        "desc": "美国CPI同比（由 CPIAUCSL 计算）",
+        "color": "#bcbd22",
+        "source": "fred",
+        "transform": "yoy",
+    },
+    "PCEPI": {
+        "name": "美国总体PCE同比",
+        "desc": "美国总体PCE价格指数同比",
+        "color": "#1f77b4",
+        "source": "fred",
+        "transform": "yoy",
+    },
+    "PCEPILFE": {
+        "name": "美国核心PCE同比",
+        "desc": "美国核心PCE价格指数同比",
+        "color": "#ff7f0e",
+        "source": "fred",
+        "transform": "yoy",
+    },
+    "UMCSENT": {
+        "name": "消费者信心指数",
+        "desc": "University of Michigan Consumer Sentiment（FRED数据按来源延迟1个月）",
+        "color": "#4c78a8",
+        "source": "fred",
+    },
+
+    # ===== 实体经济 / 制造业 / 订单 =====
+    "NEWORDER": {
+        "name": "核心资本货物订单",
+        "desc": "非国防资本货物新订单（不含飞机）",
+        "color": "#2ca02c",
+        "source": "fred",
+    },
+    "BACTSAMFRBDAL": {
+        "name": "达拉斯商业活动",
+        "desc": "达拉斯联储制造业总体商业活动指数",
+        "color": "#8c564b",
+        "source": "fred",
+    },
+    "GACDFSA066MSFRBPHI": {
+        "name": "费城企业信心",
+        "desc": "费城联储制造业当前总体活动指数",
+        "color": "#9467bd",
+        "source": "fred",
+    },
+    "GACDISA066MSFRBNY": {
+        "name": "纽约企业信心",
+        "desc": "纽约联储Empire State总体商业状况指数",
+        "color": "#d62728",
+        "source": "fred",
+    },
+
+    # ===== 劳动力市场 =====
+    "JTSJOR": {
+        "name": "美国职位空缺率",
+        "desc": "JOLTS职位空缺率",
+        "color": "#17becf",
+        "source": "fred",
+    },
+    "JTSQUR": {
+        "name": "美国离职率",
+        "desc": "JOLTS离职率",
+        "color": "#e377c2",
+        "source": "fred",
+    },
+    "UNRATE": {
+        "name": "美国失业率",
+        "desc": "美国失业率（U-3）",
+        "color": "#7f7f7f",
+        "source": "fred",
+    },
+
+    # ===== 房地产 / 消费 =====
+    "CSUSHPISA": {
+        "name": "Case-Shiller房价指数",
+        "desc": "美国全国Case-Shiller房价指数（季调后）",
+        "color": "#bcbd22",
+        "source": "fred",
+    },
+    "RSAFS": {
+        "name": "美国零售销售",
+        "desc": "美国Advance Retail Sales（名义）",
+        "color": "#17becf",
+        "source": "fred",
+    },
+    "RRSFS": {
+        "name": "美国实际零售销售",
+        "desc": "美国Real Retail Sales（实际）",
+        "color": "#ff9896",
+        "source": "fred",
+    },
+
     # OilPriceAPI 指标
     "WTI_OILPRICE": {
         "name": "WTI原油价格（过去30天日频）",
@@ -94,7 +208,7 @@ INDICATORS = {
 }
 
 # ====================== FRED API 拉取函数 ======================
-def fetch_fred_series(series_id: str, api_key: str, start_date: str = "2018-01-01") -> pd.DataFrame:
+def fetch_fred_series(series_id: str, api_key: str, start_date: str = "2000-01-01") -> pd.DataFrame:
     """
     直接调用 FRED API 获取指标数据
     """
@@ -135,6 +249,21 @@ def fetch_fred_series(series_id: str, api_key: str, start_date: str = "2018-01-0
     
     except Exception as e:
         raise ValueError(f"FRED API 拉取失败: {str(e)}")
+
+def apply_transform(df: pd.DataFrame, transform: str = None) -> pd.DataFrame:
+    """
+    对序列做必要转换，例如同比
+    """
+    if df.empty or not transform:
+        return df
+
+    result = df.copy()
+
+    if transform == "yoy":
+        result["value"] = result["value"].pct_change(12) * 100
+        result = result.dropna()
+
+    return result
 
 # ====================== OilPriceAPI 拉取函数 ======================
 def fetch_oilprice_series(commodity_code: str, api_key: str) -> pd.DataFrame:
@@ -185,8 +314,73 @@ def fetch_oilprice_series(commodity_code: str, api_key: str) -> pd.DataFrame:
     except Exception as e:
         raise ValueError(f"OilPriceAPI 拉取失败: {str(e)}")
 
+# ====================== 衰退期间 ======================
+def build_recession_periods(recession_df: pd.DataFrame):
+    """
+    输入：index 为日期、列为 value 的 USREC DataFrame
+    输出：[{"start": ..., "end": ...}, ...]
+    """
+    if recession_df.empty:
+        return []
+
+    s = recession_df["value"].fillna(0).astype(int).sort_index()
+
+    periods = []
+    in_recession = False
+    start_date = None
+
+    for dt, val in s.items():
+        if val == 1 and not in_recession:
+            in_recession = True
+            start_date = dt
+        elif val == 0 and in_recession:
+            in_recession = False
+            periods.append({"start": start_date, "end": dt})
+            start_date = None
+
+    # 理论上如果最后还在 recession，就把最后一个点当临时结束
+    if in_recession and start_date is not None:
+        periods.append({"start": start_date, "end": s.index[-1]})
+
+    return periods
+
+def add_recession_shading(fig, recession_periods, start_dt=None, end_dt=None):
+    """
+    给 Plotly 图添加美国衰退阴影区
+    """
+    for p in recession_periods:
+        x0 = p["start"]
+        x1 = p["end"]
+
+        # 可选：只画当前图表时间范围内的阴影
+        if start_dt is not None and x1 < start_dt:
+            continue
+        if end_dt is not None and x0 > end_dt:
+            continue
+
+        fig.add_vrect(
+            x0=x0,
+            x1=x1,
+            fillcolor="lightgray",
+            opacity=0.28,
+            line_width=0,
+            layer="below",
+        )
+
+    return fig
+
+
 
 # ====================== 缓存数据 ======================
+@st.cache_data(ttl=86400)
+def get_us_recession_series():
+    df = fetch_fred_series(
+        series_id="USREC",
+        api_key=fred_api_key,
+        start_date="1947-01-01"
+    )
+    return df
+
 @st.cache_data(ttl=3600)  # 1小时缓存
 def get_macro_data():
     data_dict = {}
@@ -197,8 +391,9 @@ def get_macro_data():
                 df = fetch_fred_series(
                     series_id=code,
                     api_key=fred_api_key,
-                    start_date="2018-01-01"
+                    start_date="2000-01-01"
                 )
+                df = apply_transform(df, cfg.get("transform"))
                 df.rename(columns={"value": cfg["name"]}, inplace=True)
                 data_dict[code] = df
                 
@@ -234,6 +429,7 @@ def merge_selected_data(selected_codes, data_dict):
     return pd.DataFrame()
 
 # ====================== 情景分析辅助函数 ======================
+
 def get_latest_value(data_dict, code: str):
     df = data_dict.get(code)
     if df is None or df.empty:
@@ -263,21 +459,73 @@ def get_rolling_mean(data_dict, code: str, window: int = 4):
         return None
     return float(series.tail(window).mean())
 
+def get_period_pct_change(data_dict, code: str, periods: int = 3):
+    """
+    取某指标相对 N 期前的百分比变化，适合月频序列做趋势判断
+    例如：3个月变化率
+    """
+    df = data_dict.get(code)
+    if df is None or df.empty:
+        return None
+
+    series = df.iloc[:, 0].dropna().sort_index()
+    if len(series) <= periods:
+        return None
+
+    latest = float(series.iloc[-1])
+    prev = float(series.iloc[-(periods + 1)])
+
+    if prev == 0:
+        return None
+
+    return (latest / prev - 1) * 100
+
+
+def count_negative_surveys(*values):
+    """
+    统计地区联储景气指标中，小于0的个数
+    """
+    cnt = 0
+    for v in values:
+        if v is not None and v < 0:
+            cnt += 1
+    return cnt
 
 def format_metric_value(code: str, value):
     if value is None:
         return "N/A"
+
     if code in {"WTI_OILPRICE", "BRENT_OILPRICE"}:
         return f"${value:.2f}"
-    if code == "ICSA_4W":
+
+    if code in {"ICSA", "ICSA_4W"}:
         return f"{int(value):,}"
-    if code == "ICSA":
-        return f"{int(value):,}"
+
+    if code in {
+        "T5YIE", "T5YIFR", "DGS2", "BAMLH0A0HYM2", "VIXCLS", "NFCI",
+        "SAHMREALTIME", "PCEPI", "PCEPILFE", "UNRATE", "JTSJOR", "JTSQUR"
+    }:
+        return f"{value:.2f}"
+
+    if code in {"NEWORDER", "RSAFS", "RRSFS"}:
+        return f"{value:,.2f}"
+
+    if code in {"NEWORDER_3M", "RSAFS_3M", "RRSFS_3M"}:
+        return f"{value:.2f}%"
+
+    if code == "REGIONAL_NEG_COUNT":
+        return f"{int(value)}"
+
     return f"{value:.2f}"
 
 
 def build_current_metrics(data_dict):
+    dallas = get_latest_value(data_dict, "BACTSAMFRBDAL")
+    philly = get_latest_value(data_dict, "GACDFSA066MSFRBPHI")
+    nyfed = get_latest_value(data_dict, "GACDISA066MSFRBNY")
+
     return {
+        # 原有核心指标
         "WTI_OILPRICE": get_latest_value(data_dict, "WTI_OILPRICE"),
         "BRENT_OILPRICE": get_latest_value(data_dict, "BRENT_OILPRICE"),
         "T5YIE": get_latest_value(data_dict, "T5YIE"),
@@ -289,6 +537,27 @@ def build_current_metrics(data_dict):
         "ICSA": get_latest_value(data_dict, "ICSA"),
         "ICSA_4W": get_rolling_mean(data_dict, "ICSA", 4),
         "SAHMREALTIME": get_latest_value(data_dict, "SAHMREALTIME"),
+
+        # 新加入指标
+        "PCEPI": get_latest_value(data_dict, "PCEPI"),
+        "PCEPILFE": get_latest_value(data_dict, "PCEPILFE"),
+        "NEWORDER": get_latest_value(data_dict, "NEWORDER"),
+        "JTSJOR": get_latest_value(data_dict, "JTSJOR"),
+        "JTSQUR": get_latest_value(data_dict, "JTSQUR"),
+        "UNRATE": get_latest_value(data_dict, "UNRATE"),
+        "RSAFS": get_latest_value(data_dict, "RSAFS"),
+        "RRSFS": get_latest_value(data_dict, "RRSFS"),
+        "BACTSAMFRBDAL": dallas,
+        "GACDFSA066MSFRBPHI": philly,
+        "GACDISA066MSFRBNY": nyfed,
+
+        # 趋势派生指标
+        "NEWORDER_3M": get_period_pct_change(data_dict, "NEWORDER", 3),
+        "RSAFS_3M": get_period_pct_change(data_dict, "RSAFS", 3),
+        "RRSFS_3M": get_period_pct_change(data_dict, "RRSFS", 3),
+
+        # 区域联储景气汇总
+        "REGIONAL_NEG_COUNT": count_negative_surveys(dallas, philly, nyfed),
     }
 
 
@@ -415,142 +684,167 @@ def compute_confidence(sorted_results):
 
 SCENARIOS = [
     {
-        "key": "soft_landing",
-        "label": "软着陆 / 震荡修复",
-        "color": "green",
-        "summary": "通胀锚稳定、利率回落、信用未恶化，就业仍稳。",
-        "rules": [
-            {"metric": "T5YIE", "op": "<=", "value": 2.40, "weight": 2, "label": "T5YIE"},
-            {"metric": "T5YIFR", "op": "between", "low": 2.00, "high": 2.40, "weight": 2, "label": "5y5y近似"},
-            {"metric": "DGS2", "op": "<", "value": 3.55, "weight": 2, "label": "2年美债"},
-            {"metric": "BAMLH0A0HYM2", "op": "<", "value": 4.00, "weight": 2, "label": "HY OAS"},
-            {"metric": "VIXCLS", "op": "<", "value": 20, "weight": 1, "label": "VIX"},
-            {"metric": "NFCI", "op": "<", "value": 0, "weight": 1, "label": "NFCI"},
-            {"metric": "ICSA_4W", "op": "<", "value": 230000, "weight": 1, "label": "初请4周均值"},
-            {"metric": "SAHMREALTIME", "op": "<", "value": 0.30, "weight": 2, "label": "Sahm"},
-            {"metric": "BRENT_OILPRICE", "op": "<", "value": 95, "weight": 1, "label": "Brent"},
-        ],
-        "anti_rules": [
-            {"metric": "BRENT_OILPRICE", "op": ">", "value": 105, "weight": -2, "label": "Brent"},
-            {"metric": "T5YIE", "op": ">", "value": 2.70, "weight": -2, "label": "T5YIE"},
-            {"metric": "VIXCLS", "op": ">", "value": 28, "weight": -2, "label": "VIX"},
-        ],
-        "hard_triggers": [],
-        "hard_bonus": 0,
+    "key": "soft_landing",
+    "label": "软着陆 / 震荡修复",
+    "color": "green",
+    "summary": "通胀锚稳定、前端利率回落、信用未恶化，就业和消费仍稳。",
+    "rules": [
+        {"metric": "T5YIE", "op": "<=", "value": 2.40, "weight": 2, "label": "T5YIE"},
+        {"metric": "T5YIFR", "op": "between", "low": 2.00, "high": 2.40, "weight": 2, "label": "5y5y近似"},
+        {"metric": "DGS2", "op": "<", "value": 3.55, "weight": 2, "label": "2年美债"},
+        {"metric": "PCEPILFE", "op": "<", "value": 2.70, "weight": 2, "label": "核心PCE同比"},
+        {"metric": "BAMLH0A0HYM2", "op": "<", "value": 4.00, "weight": 2, "label": "HY OAS"},
+        {"metric": "VIXCLS", "op": "<", "value": 20, "weight": 1, "label": "VIX"},
+        {"metric": "NFCI", "op": "<", "value": 0, "weight": 1, "label": "NFCI"},
+        {"metric": "UNRATE", "op": "<", "value": 4.30, "weight": 1, "label": "失业率"},
+        {"metric": "ICSA_4W", "op": "<", "value": 230000, "weight": 1, "label": "初请4周均值"},
+        {"metric": "RRSFS_3M", "op": ">", "value": 0, "weight": 1, "label": "实际零售3个月变化"},
+        {"metric": "SAHMREALTIME", "op": "<", "value": 0.30, "weight": 2, "label": "Sahm"},
+        {"metric": "BRENT_OILPRICE", "op": "<", "value": 95, "weight": 1, "label": "Brent"},
+    ],
+    "anti_rules": [
+        {"metric": "BRENT_OILPRICE", "op": ">", "value": 105, "weight": -2, "label": "Brent"},
+        {"metric": "T5YIE", "op": ">", "value": 2.70, "weight": -2, "label": "T5YIE"},
+        {"metric": "VIXCLS", "op": ">", "value": 28, "weight": -2, "label": "VIX"},
+        {"metric": "REGIONAL_NEG_COUNT", "op": ">=", "value": 2, "weight": -1, "label": "区域联储景气偏弱个数"},
+    ],
+    "hard_triggers": [],
+    "hard_bonus": 0,
     },
     {
-        "key": "near_term_inflation_shock",
-        "label": "近端通胀冲击（未衰退）",
-        "color": "yellow",
-        "summary": "油价与近端通胀预期上行，但长期通胀锚和增长尚未全面恶化。",
-        "rules": [
-            {"metric": "BRENT_OILPRICE", "op": ">=", "value": 100, "weight": 2, "label": "Brent"},
-            {"metric": "T5YIE", "op": ">=", "value": 2.60, "weight": 2, "label": "T5YIE"},
-            {"metric": "T5YIFR", "op": "between", "low": 2.00, "high": 2.40, "weight": 2, "label": "5y5y近似"},
-            {"metric": "DGS2", "op": "between", "low": 3.50, "high": 3.85, "weight": 1, "label": "2年美债"},
-            {"metric": "BAMLH0A0HYM2", "op": "<", "value": 4.50, "weight": 1, "label": "HY OAS"},
-            {"metric": "SAHMREALTIME", "op": "<", "value": 0.30, "weight": 1, "label": "Sahm"},
-            {"metric": "NFCI", "op": "<", "value": 0.20, "weight": 1, "label": "NFCI"},
-        ],
-        "anti_rules": [
-            {"metric": "T5YIFR", "op": ">=", "value": 2.50, "weight": -2, "label": "5y5y近似"},
-            {"metric": "SAHMREALTIME", "op": ">=", "value": 0.50, "weight": -3, "label": "Sahm"},
-        ],
-        "hard_triggers": [],
-        "hard_bonus": 0,
+    "key": "near_term_inflation_shock",
+    "label": "近端通胀冲击（未衰退）",
+    "color": "yellow",
+    "summary": "油价与近端通胀预期上行，但长期通胀锚和增长尚未全面恶化。",
+    "rules": [
+        {"metric": "BRENT_OILPRICE", "op": ">=", "value": 100, "weight": 2, "label": "Brent"},
+        {"metric": "T5YIE", "op": ">=", "value": 2.60, "weight": 2, "label": "T5YIE"},
+        {"metric": "T5YIFR", "op": "between", "low": 2.00, "high": 2.40, "weight": 2, "label": "5y5y近似"},
+        {"metric": "PCEPI", "op": ">=", "value": 2.50, "weight": 1, "label": "总体PCE同比"},
+        {"metric": "PCEPILFE", "op": ">=", "value": 2.60, "weight": 1, "label": "核心PCE同比"},
+        {"metric": "DGS2", "op": "between", "low": 3.50, "high": 3.85, "weight": 1, "label": "2年美债"},
+        {"metric": "BAMLH0A0HYM2", "op": "<", "value": 4.50, "weight": 1, "label": "HY OAS"},
+        {"metric": "SAHMREALTIME", "op": "<", "value": 0.30, "weight": 1, "label": "Sahm"},
+        {"metric": "UNRATE", "op": "<", "value": 4.30, "weight": 1, "label": "失业率"},
+        {"metric": "NFCI", "op": "<", "value": 0.20, "weight": 1, "label": "NFCI"},
+    ],
+    "anti_rules": [
+        {"metric": "T5YIFR", "op": ">=", "value": 2.50, "weight": -2, "label": "5y5y近似"},
+        {"metric": "SAHMREALTIME", "op": ">=", "value": 0.50, "weight": -3, "label": "Sahm"},
+        {"metric": "RRSFS_3M", "op": "<=", "value": 0, "weight": -1, "label": "实际零售3个月变化"},
+    ],
+    "hard_triggers": [],
+    "hard_bonus": 0,
     },
     {
-        "key": "higher_for_longer",
-        "label": "更高更久 / 通胀锚松动",
-        "color": "yellow",
-        "summary": "前端利率高位、通胀锚上修，市场不再相信顺畅宽松路径。",
-        "rules": [
-            {"metric": "DGS2", "op": ">=", "value": 3.85, "weight": 3, "label": "2年美债"},
-            {"metric": "T5YIE", "op": ">=", "value": 2.70, "weight": 2, "label": "T5YIE"},
-            {"metric": "T5YIFR", "op": ">=", "value": 2.50, "weight": 2, "label": "5y5y近似"},
-            {"metric": "BRENT_OILPRICE", "op": ">=", "value": 105, "weight": 1, "label": "Brent"},
-            {"metric": "VIXCLS", "op": "between", "low": 20, "high": 30, "weight": 1, "label": "VIX"},
-            {"metric": "BAMLH0A0HYM2", "op": "between", "low": 3.5, "high": 5.0, "weight": 1, "label": "HY OAS"},
-        ],
-        "anti_rules": [
-            {"metric": "DGS2", "op": "<", "value": 3.50, "weight": -3, "label": "2年美债"},
-            {"metric": "T5YIFR", "op": "<", "value": 2.40, "weight": -2, "label": "5y5y近似"},
-        ],
-        "hard_triggers": [],
-        "hard_bonus": 0,
+    "key": "higher_for_longer",
+    "label": "更高更久 / 通胀锚松动",
+    "color": "yellow",
+    "summary": "前端利率高位、PCE与远期通胀预期上修，市场不再相信顺畅宽松路径。",
+    "rules": [
+        {"metric": "DGS2", "op": ">=", "value": 3.85, "weight": 3, "label": "2年美债"},
+        {"metric": "T5YIE", "op": ">=", "value": 2.70, "weight": 2, "label": "T5YIE"},
+        {"metric": "T5YIFR", "op": ">=", "value": 2.50, "weight": 2, "label": "5y5y近似"},
+        {"metric": "PCEPILFE", "op": ">=", "value": 2.80, "weight": 2, "label": "核心PCE同比"},
+        {"metric": "BRENT_OILPRICE", "op": ">=", "value": 105, "weight": 1, "label": "Brent"},
+        {"metric": "JTSJOR", "op": ">=", "value": 4.20, "weight": 1, "label": "职位空缺率"},
+        {"metric": "UNRATE", "op": "<=", "value": 4.10, "weight": 1, "label": "失业率"},
+        {"metric": "VIXCLS", "op": "between", "low": 20, "high": 30, "weight": 1, "label": "VIX"},
+    ],
+    "anti_rules": [
+        {"metric": "DGS2", "op": "<", "value": 3.50, "weight": -3, "label": "2年美债"},
+        {"metric": "T5YIFR", "op": "<", "value": 2.40, "weight": -2, "label": "5y5y近似"},
+        {"metric": "UNRATE", "op": ">=", "value": 4.40, "weight": -1, "label": "失业率"},
+    ],
+    "hard_triggers": [],
+    "hard_bonus": 0,
     },
     {
-        "key": "stagflation_test",
-        "label": "滞胀压力测试",
-        "color": "yellow",
-        "summary": "油价高、近端通胀高、利率高，但信用与就业尚未完全进入事故区。",
-        "rules": [
-            {"metric": "BRENT_OILPRICE", "op": "between", "low": 105, "high": 120, "weight": 2, "label": "Brent"},
-            {"metric": "T5YIE", "op": "between", "low": 2.55, "high": 2.90, "weight": 2, "label": "T5YIE"},
-            {"metric": "DGS2", "op": "between", "low": 3.60, "high": 3.95, "weight": 2, "label": "2年美债"},
-            {"metric": "BAMLH0A0HYM2", "op": "between", "low": 3.20, "high": 4.20, "weight": 1, "label": "HY OAS"},
-            {"metric": "VIXCLS", "op": "between", "low": 20, "high": 30, "weight": 1, "label": "VIX"},
-            {"metric": "NFCI", "op": "<", "value": 0.30, "weight": 1, "label": "NFCI"},
-            {"metric": "ICSA_4W", "op": "between", "low": 230000, "high": 270000, "weight": 1, "label": "初请4周均值"},
-            {"metric": "SAHMREALTIME", "op": "between", "low": 0.30, "high": 0.49, "weight": 2, "label": "Sahm"},
-        ],
-        "anti_rules": [
-            {"metric": "BAMLH0A0HYM2", "op": ">=", "value": 5.00, "weight": -2, "label": "HY OAS"},
-            {"metric": "SAHMREALTIME", "op": ">=", "value": 0.50, "weight": -3, "label": "Sahm"},
-        ],
-        "hard_triggers": [],
-        "hard_bonus": 0,
+    "key": "stagflation_test",
+    "label": "滞胀压力测试",
+    "color": "yellow",
+    "summary": "油价高、近端通胀高、利率高，但信用与就业尚未完全进入事故区；增长前导开始转弱。",
+    "rules": [
+        {"metric": "BRENT_OILPRICE", "op": "between", "low": 105, "high": 120, "weight": 2, "label": "Brent"},
+        {"metric": "T5YIE", "op": "between", "low": 2.55, "high": 2.90, "weight": 2, "label": "T5YIE"},
+        {"metric": "PCEPILFE", "op": ">=", "value": 2.70, "weight": 1, "label": "核心PCE同比"},
+        {"metric": "DGS2", "op": "between", "low": 3.60, "high": 3.95, "weight": 2, "label": "2年美债"},
+        {"metric": "BAMLH0A0HYM2", "op": "between", "low": 3.20, "high": 4.20, "weight": 1, "label": "HY OAS"},
+        {"metric": "VIXCLS", "op": "between", "low": 20, "high": 30, "weight": 1, "label": "VIX"},
+        {"metric": "NFCI", "op": "<", "value": 0.30, "weight": 1, "label": "NFCI"},
+        {"metric": "UNRATE", "op": "between", "low": 4.10, "high": 4.50, "weight": 1, "label": "失业率"},
+        {"metric": "ICSA_4W", "op": "between", "low": 230000, "high": 270000, "weight": 1, "label": "初请4周均值"},
+        {"metric": "SAHMREALTIME", "op": "between", "low": 0.30, "high": 0.49, "weight": 2, "label": "Sahm"},
+        {"metric": "NEWORDER_3M", "op": "<=", "value": 0, "weight": 1, "label": "核心资本货物订单3个月变化"},
+        {"metric": "RRSFS_3M", "op": "<=", "value": 0, "weight": 1, "label": "实际零售3个月变化"},
+        {"metric": "REGIONAL_NEG_COUNT", "op": ">=", "value": 2, "weight": 1, "label": "区域联储景气偏弱个数"},
+    ],
+    "anti_rules": [
+        {"metric": "BAMLH0A0HYM2", "op": ">=", "value": 5.00, "weight": -2, "label": "HY OAS"},
+        {"metric": "SAHMREALTIME", "op": ">=", "value": 0.50, "weight": -3, "label": "Sahm"},
+        {"metric": "T5YIFR", "op": ">=", "value": 2.60, "weight": -1, "label": "5y5y近似"},
+    ],
+    "hard_triggers": [],
+    "hard_bonus": 0,
     },
     {
-        "key": "recession_confirmation",
-        "label": "衰退确认",
-        "color": "red",
-        "summary": "就业、信用、波动率与金融条件共振恶化，开始进入衰退交易。",
-        "rules": [
-            {"metric": "SAHMREALTIME", "op": ">=", "value": 0.50, "weight": 3, "label": "Sahm"},
-            {"metric": "ICSA_4W", "op": ">=", "value": 270000, "weight": 2, "label": "初请4周均值"},
-            {"metric": "BAMLH0A0HYM2", "op": ">=", "value": 5.00, "weight": 2, "label": "HY OAS"},
-            {"metric": "VIXCLS", "op": ">=", "value": 30, "weight": 1, "label": "VIX"},
-            {"metric": "NFCI", "op": ">=", "value": 0.50, "weight": 2, "label": "NFCI"},
-            {"metric": "DGS2", "op": "<", "value": 3.50, "weight": 1, "label": "2年美债"},
-        ],
-        "anti_rules": [
-            {"metric": "SAHMREALTIME", "op": "<", "value": 0.40, "weight": -3, "label": "Sahm"},
-            {"metric": "BAMLH0A0HYM2", "op": "<", "value": 4.00, "weight": -2, "label": "HY OAS"},
-        ],
-        "hard_triggers": [
-            [
-                {"metric": "SAHMREALTIME", "op": ">=", "value": 0.50},
-                {"metric": "BAMLH0A0HYM2", "op": ">=", "value": 5.00},
-            ]
-        ],
-        "hard_bonus": 2,
+    "key": "recession_confirmation",
+    "label": "衰退确认",
+    "color": "red",
+    "summary": "就业、信用、波动率与金融条件共振恶化，订单/零售/景气开始同步下行。",
+    "rules": [
+        {"metric": "SAHMREALTIME", "op": ">=", "value": 0.50, "weight": 3, "label": "Sahm"},
+        {"metric": "ICSA_4W", "op": ">=", "value": 270000, "weight": 2, "label": "初请4周均值"},
+        {"metric": "UNRATE", "op": ">=", "value": 4.50, "weight": 2, "label": "失业率"},
+        {"metric": "BAMLH0A0HYM2", "op": ">=", "value": 5.00, "weight": 2, "label": "HY OAS"},
+        {"metric": "VIXCLS", "op": ">=", "value": 30, "weight": 1, "label": "VIX"},
+        {"metric": "NFCI", "op": ">=", "value": 0.50, "weight": 2, "label": "NFCI"},
+        {"metric": "DGS2", "op": "<", "value": 3.50, "weight": 1, "label": "2年美债"},
+        {"metric": "NEWORDER_3M", "op": "<=", "value": -1.0, "weight": 1, "label": "核心资本货物订单3个月变化"},
+        {"metric": "RRSFS_3M", "op": "<=", "value": -1.0, "weight": 1, "label": "实际零售3个月变化"},
+        {"metric": "REGIONAL_NEG_COUNT", "op": ">=", "value": 2, "weight": 1, "label": "区域联储景气偏弱个数"},
+        {"metric": "JTSJOR", "op": "<", "value": 4.0, "weight": 1, "label": "职位空缺率"},
+    ],
+    "anti_rules": [
+        {"metric": "SAHMREALTIME", "op": "<", "value": 0.40, "weight": -3, "label": "Sahm"},
+        {"metric": "BAMLH0A0HYM2", "op": "<", "value": 4.00, "weight": -2, "label": "HY OAS"},
+        {"metric": "UNRATE", "op": "<", "value": 4.20, "weight": -1, "label": "失业率"},
+    ],
+    "hard_triggers": [
+        [
+            {"metric": "SAHMREALTIME", "op": ">=", "value": 0.50},
+            {"metric": "BAMLH0A0HYM2", "op": ">=", "value": 5.00},
+        ]
+    ],
+    "hard_bonus": 2,
     },
     {
-        "key": "credit_event",
-        "label": "信用事故 / 流动性踩踏",
-        "color": "red",
-        "summary": "信用利差、波动率、金融条件同步恶化，市场进入应急定价阶段。",
-        "rules": [
-            {"metric": "BAMLH0A0HYM2", "op": ">=", "value": 6.00, "weight": 3, "label": "HY OAS"},
-            {"metric": "VIXCLS", "op": ">=", "value": 35, "weight": 2, "label": "VIX"},
-            {"metric": "NFCI", "op": ">=", "value": 1.00, "weight": 2, "label": "NFCI"},
-            {"metric": "SAHMREALTIME", "op": ">=", "value": 0.50, "weight": 1, "label": "Sahm"},
-            {"metric": "ICSA_4W", "op": ">=", "value": 300000, "weight": 1, "label": "初请4周均值"},
-        ],
-        "anti_rules": [
-            {"metric": "BAMLH0A0HYM2", "op": "<", "value": 4.50, "weight": -3, "label": "HY OAS"},
-            {"metric": "VIXCLS", "op": "<", "value": 25, "weight": -2, "label": "VIX"},
-            {"metric": "NFCI", "op": "<", "value": 0, "weight": -2, "label": "NFCI"},
-        ],
-        "hard_triggers": [
-            [
-                {"metric": "BAMLH0A0HYM2", "op": ">=", "value": 6.00},
-                {"metric": "VIXCLS", "op": ">=", "value": 35},
-                {"metric": "NFCI", "op": ">=", "value": 1.00},
-            ]
-        ],
-        "hard_bonus": 3,
+    "key": "credit_event",
+    "label": "信用事故 / 流动性踩踏",
+    "color": "red",
+    "summary": "信用利差、波动率、金融条件同步恶化，市场进入应急定价阶段。",
+    "rules": [
+        {"metric": "BAMLH0A0HYM2", "op": ">=", "value": 6.00, "weight": 3, "label": "HY OAS"},
+        {"metric": "VIXCLS", "op": ">=", "value": 35, "weight": 2, "label": "VIX"},
+        {"metric": "NFCI", "op": ">=", "value": 1.00, "weight": 2, "label": "NFCI"},
+        {"metric": "SAHMREALTIME", "op": ">=", "value": 0.50, "weight": 1, "label": "Sahm"},
+        {"metric": "ICSA_4W", "op": ">=", "value": 300000, "weight": 1, "label": "初请4周均值"},
+        {"metric": "UNRATE", "op": ">=", "value": 4.70, "weight": 1, "label": "失业率"},
+        {"metric": "REGIONAL_NEG_COUNT", "op": ">=", "value": 3, "weight": 1, "label": "区域联储景气偏弱个数"},
+    ],
+    "anti_rules": [
+        {"metric": "BAMLH0A0HYM2", "op": "<", "value": 4.50, "weight": -3, "label": "HY OAS"},
+        {"metric": "VIXCLS", "op": "<", "value": 25, "weight": -2, "label": "VIX"},
+        {"metric": "NFCI", "op": "<", "value": 0, "weight": -2, "label": "NFCI"},
+    ],
+    "hard_triggers": [
+        [
+            {"metric": "BAMLH0A0HYM2", "op": ">=", "value": 6.00},
+            {"metric": "VIXCLS", "op": ">=", "value": 35},
+            {"metric": "NFCI", "op": ">=", "value": 1.00},
+        ]
+    ],
+    "hard_bonus": 3,
     },
 ]
 
@@ -687,13 +981,25 @@ def get_group_latest_date(data_dict, monitors) -> Optional[pd.Timestamp]:
 
 
 
-def format_alert_value(code: str, value: Optional[float]) -> str:
+def format_alert_value(code: str, value):
     if value is None:
         return "N/A"
+
     if code in {"WTI_OILPRICE", "BRENT_OILPRICE"}:
         return f"${value:.2f}"
-    if code == "ICSA":
+
+    if code in {"ICSA"}:
         return f"{int(value):,}"
+
+    if code in {
+        "T5YIE", "T5YIFR", "DGS2", "BAMLH0A0HYM2", "VIXCLS", "NFCI",
+        "SAHMREALTIME", "PCEPI", "PCEPILFE", "UNRATE", "JTSJOR", "JTSQUR"
+    }:
+        return f"{value:.2f}"
+
+    if code in {"NEWORDER", "RSAFS", "RRSFS", "CSUSHPISA"}:
+        return f"{value:,.2f}"
+
     return f"{value:.2f}"
 
 
@@ -703,6 +1009,10 @@ def build_alert_groups(data_dict):
     返回 [{'title', 'status', 'headline', 'detail', 'monitors'}]
     status: green / yellow / red
     """
+
+    # ----------------------
+    # 读取主指标
+    # ----------------------
     brent = get_latest_value(data_dict, "BRENT_OILPRICE")
     wti = get_latest_value(data_dict, "WTI_OILPRICE")
     t5yie = get_latest_value(data_dict, "T5YIE")
@@ -714,38 +1024,70 @@ def build_alert_groups(data_dict):
     icsa_4w = get_rolling_mean(data_dict, "ICSA", 4)
     sahm = get_latest_value(data_dict, "SAHMREALTIME")
 
+    # ----------------------
+    # 新加入指标
+    # ----------------------
+    pce = get_latest_value(data_dict, "PCEPI")
+    pce_core = get_latest_value(data_dict, "PCEPILFE")
+    unrate = get_latest_value(data_dict, "UNRATE")
+    jtsjor = get_latest_value(data_dict, "JTSJOR")
+    jtsqur = get_latest_value(data_dict, "JTSQUR")
+    neworder = get_latest_value(data_dict, "NEWORDER")
+    rsafs = get_latest_value(data_dict, "RSAFS")
+    rrsfs = get_latest_value(data_dict, "RRSFS")
+    dallas = get_latest_value(data_dict, "BACTSAMFRBDAL")
+    philly = get_latest_value(data_dict, "GACDFSA066MSFRBPHI")
+    nyfed = get_latest_value(data_dict, "GACDISA066MSFRBNY")
+
+    # 趋势确认项（3个月变化率）
+    neworder_3m = get_period_pct_change(data_dict, "NEWORDER", 3)
+    rsafs_3m = get_period_pct_change(data_dict, "RSAFS", 3)
+    rrsfs_3m = get_period_pct_change(data_dict, "RRSFS", 3)
+
+    regional_neg_count = count_negative_surveys(dallas, philly, nyfed)
+
     alerts = []
 
-    # ======================
-    # 第一组：油价冲击是否正在持续化并向通胀传导
-    # ======================
+    # =========================================================
+    # ① 油价冲击 → 通胀传导
+    # 主触发：Brent / T5YIE
+    # 二级确认：PCEPI / 核心PCE / 5y5y
+    # =========================================================
     oil_red = (
-        brent is not None and t5yie is not None and
-        brent >= 105 and t5yie >= 2.7 
+        brent is not None and brent >= 105 and
+        t5yie is not None and t5yie >= 2.7 and
+        (
+            (pce is not None and pce >= 2.6) or
+            (pce_core is not None and pce_core >= 2.7)
+        )
     )
+
     oil_yellow_signals = [
         brent is not None and brent >= 95,
         t5yie is not None and t5yie >= 2.5,
+        pce is not None and pce >= 2.5,
+        pce_core is not None and pce_core >= 2.6,
         t5yifr is not None and t5yifr >= 2.4,
     ]
-    oil_yellow = sum(oil_yellow_signals) >= 2 and not oil_red
+    oil_yellow = (sum(oil_yellow_signals) >= 2) and (not oil_red)
 
     if oil_red:
         if t5yifr is not None and t5yifr >= 2.5:
+            oil_status = "red"
             oil_headline = "红色：油价冲击已明显传导，且长期通胀锚有松动迹象"
-            oil_detail = "Brent、T5YIE、CPI 同时达到高风险区，且 5y5y 进一步走高，更接近“近端冲击+长期预期松动”组合。"
+            oil_detail = "Brent 与 T5YIE 同时处于高风险区，且总体/核心PCE已进入偏热区；若 5y5y 也继续上行，更接近“近端冲击 + 长期预期松动”组合。"
         else:
-            oil_headline = "红色：油价冲击正在向通胀传导"
-            oil_detail = "Brent、T5YIE、CPI 同时进入高风险区，但 5y5y 若仍相对稳定，更像近端通胀冲击而非长期失锚。"
-        oil_status = "red"
+            oil_status = "red"
+            oil_headline = "红色：油价冲击正在向通胀预期和PCE传导"
+            oil_detail = "Brent 与 T5YIE 同时进入高风险区，且PCE端已有确认；但若 5y5y 仍稳定，则更像近端通胀冲击而非长期失锚。"
     elif oil_yellow:
-        oil_headline = "黄色：油价与通胀预期开始共振，需重点跟踪"
-        oil_detail = "已出现至少两项预警信号，说明冲击可能正在从能源价格向通胀预期传导，但尚未形成强确认。"
         oil_status = "yellow"
+        oil_headline = "黄色：油价与通胀预期开始共振，需重点跟踪"
+        oil_detail = "主触发变量已偏热，且PCE开始跟随上行，说明冲击可能正在从能源价格向通胀预期传导。"
     else:
-        oil_headline = "绿色：当前更像事件性扰动，未见显著持续化传导"
-        oil_detail = "油价、近端通胀预期与 CPI 未同时进入高风险区，暂不支持“新一轮通胀 regime”判断。"
         oil_status = "green"
+        oil_headline = "绿色：当前更像事件性扰动，未见显著持续化传导"
+        oil_detail = "油价、近端通胀预期与PCE未同时进入高风险区，暂不支持“新一轮通胀 regime”判断。"
 
     alerts.append({
         "title": "① 油价冲击 → 通胀传导",
@@ -756,40 +1098,53 @@ def build_alert_groups(data_dict):
             ("Brent", "BRENT_OILPRICE", brent, "红线 ≥ 105；关注线 ≥ 95"),
             ("WTI", "WTI_OILPRICE", wti, "辅助观察"),
             ("T5YIE", "T5YIE", t5yie, "红线 ≥ 2.7；关注线 ≥ 2.5"),
-            ("5y5y近似(T5YIFR)", "T5YIFR", t5yifr, "锚定区 2.2~2.4；>2.5 偏危险"),
+            ("5y5y近似", "T5YIFR", t5yifr, "锚定区 2.2~2.4；>2.5 偏危险"),
+            ("总体PCE同比", "PCEPI", pce, "偏热参考 ≥ 2.6"),
+            ("核心PCE同比", "PCEPILFE", pce_core, "偏热参考 ≥ 2.7"),
         ]
     })
 
-    # ======================
-    # 第二组：政策是否“暂停更久 / 更高更久”
-    # ======================
+    # =========================================================
+    # ② 政策暂停 / 更高更久
+    # 主触发：2Y
+    # 二级确认：核心PCE / 失业率 / 职位空缺率 / 离职率
+    # =========================================================
+    labor_tight_signals = [
+        unrate is not None and unrate <= 4.1,
+        jtsjor is not None and jtsjor >= 4.2,
+        jtsqur is not None and jtsqur >= 2.1,
+    ]
+
     policy_red = (
         dgs2 is not None and dgs2 >= 3.85 and
         (
-            (brent is not None and brent >= 105) or
+            (pce_core is not None and pce_core >= 2.9) or
             (t5yie is not None and t5yie >= 2.7)
-        )
+        ) and
+        sum(labor_tight_signals) >= 1
     )
 
     policy_yellow = (
-        dgs2 is not None and (
-            3.50 <= dgs2 < 3.85 or
-            (dgs2 >= 3.60 and brent is not None and brent >= 100)
+        dgs2 is not None and dgs2 >= 3.60 and
+        (
+            (pce_core is not None and pce_core >= 2.7) or
+            (t5yie is not None and t5yie >= 2.6) or
+            sum(labor_tight_signals) >= 2
         )
     ) and not policy_red
 
     if policy_red:
         policy_status = "red"
         policy_headline = "红色：市场在定价“更久不降”甚至更鹰尾部"
-        policy_detail = "2年美债已逼近/突破 3.85%，且油价或通胀预期未回落，说明政策宽松路径被明显打断。"
+        policy_detail = "2年美债已逼近/突破高风险区，核心PCE与通胀预期仍偏高，且劳动力市场并未明显降温，政策宽松路径被明显打断。"
     elif policy_yellow:
         policy_status = "yellow"
         policy_headline = "黄色：政策处于暂停观察期"
-        policy_detail = "2年美债仍在高位，市场尚未重新相信联储会恢复顺畅宽松。"
+        policy_detail = "2年美债仍处高位，核心PCE与劳动力市场指标尚未给出足够宽松理由，市场仍在交易“暂停更久”。"
     else:
         policy_status = "green"
         policy_headline = "绿色：政策约束有所缓和"
-        policy_detail = "2年美债回落到相对温和区间，市场对宽松路径的信心有所修复。"
+        policy_detail = "2年美债和核心PCE均较温和，劳动力市场也有降温迹象，市场对宽松路径的信心有所修复。"
 
     alerts.append({
         "title": "② 政策暂停 / 更高更久",
@@ -797,15 +1152,20 @@ def build_alert_groups(data_dict):
         "headline": policy_headline,
         "detail": policy_detail,
         "monitors": [
-            ("2年美债", "DGS2", dgs2, "红线 ≥ 3.85；宽松修复参考 < 3.50"),
-            ("Brent", "BRENT_OILPRICE", brent, "高油价会抬高政策约束"),
-            ("T5YIE", "T5YIE", t5yie, "高通胀预期会抬高政策约束"),
+            ("2年美债", "DGS2", dgs2, "红线 ≥ 3.85；缓和参考 < 3.50"),
+            ("核心PCE同比", "PCEPILFE", pce_core, "红线 ≥ 2.9；关注线 ≥ 2.7"),
+            ("失业率", "UNRATE", unrate, "低于 4.1 代表就业仍偏紧"),
+            ("职位空缺率", "JTSJOR", jtsjor, "高于 4.2 偏紧"),
+            ("离职率", "JTSQUR", jtsqur, "高于 2.1 偏热"),
+            ("T5YIE", "T5YIE", t5yie, "通胀预期偏高会抬高政策约束"),
         ]
     })
 
-    # ======================
-    # 第三组：风险是否扩散到信用与增长
-    # ======================
+    # =========================================================
+    # ③ 信用 / 增长扩散
+    # 主触发：HY OAS / VIX / NFCI / ICSA / Sahm
+    # 二级确认：UNRATE / JOLTS / NEWORDER / 零售 / 区域联储景气
+    # =========================================================
     spread_red_signals = [
         hy_oas is not None and hy_oas >= 4.25,
         vix is not None and vix >= 30,
@@ -813,6 +1173,7 @@ def build_alert_groups(data_dict):
         icsa_4w is not None and icsa_4w >= 270000,
         sahm is not None and sahm >= 0.50,
     ]
+
     spread_yellow_signals = [
         hy_oas is not None and hy_oas >= 3.75,
         vix is not None and vix >= 28,
@@ -821,21 +1182,37 @@ def build_alert_groups(data_dict):
         sahm is not None and sahm >= 0.40,
     ]
 
-    spread_red = sum(spread_red_signals) >= 2
-    spread_yellow = sum(spread_yellow_signals) >= 2 and not spread_red
+    growth_confirm_signals = [
+        unrate is not None and unrate >= 4.3,
+        jtsjor is not None and jtsjor < 4.0,
+        jtsqur is not None and jtsqur < 2.0,
+        neworder_3m is not None and neworder_3m <= 0,
+        rrsfs_3m is not None and rrsfs_3m <= 0,
+        regional_neg_count >= 2,
+    ]
+
+    spread_red = (
+        sum(spread_red_signals) >= 2 or
+        (sum(spread_red_signals) >= 1 and sum(growth_confirm_signals) >= 3)
+    )
+
+    spread_yellow = (
+        (sum(spread_yellow_signals) >= 2) or
+        (sum(spread_yellow_signals) >= 1 and sum(growth_confirm_signals) >= 2)
+    ) and not spread_red
 
     if spread_red:
         spread_status = "red"
         spread_headline = "红色：压力已向信用与增长层面扩散"
-        spread_detail = "这不再只是油价或估值扰动，而是融资条件、波动率、就业前导与衰退信号正在共振恶化。"
+        spread_detail = "这不再只是油价或估值扰动，而是融资条件、就业前导、订单/零售趋势与地区联储景气正同步恶化。"
     elif spread_yellow:
         spread_status = "yellow"
         spread_headline = "黄色：信用与增长开始出现传导压力"
-        spread_detail = "已出现多项黄灯信号，说明市场压力正在从资产价格向实体与融资条件扩散。"
+        spread_detail = "主触发变量已有黄灯，同时增长侧确认信号开始转弱，说明市场压力正在从资产价格向实体与融资条件扩散。"
     else:
         spread_status = "green"
-        spread_headline = "绿色：当前仍以估值/风险偏好重定价为主"
-        spread_detail = "信用、金融条件与就业前导尚未同步恶化，暂不支持“信用事故”判断。"
+        spread_headline = "绿色：当前仍以估值 / 风险偏好重定价为主"
+        spread_detail = "信用、金融条件与增长前导尚未同步恶化，暂不支持“信用事故 / 衰退确认”判断。"
 
     alerts.append({
         "title": "③ 信用 / 增长扩散",
@@ -845,14 +1222,21 @@ def build_alert_groups(data_dict):
         "monitors": [
             ("HY OAS", "BAMLH0A0HYM2", hy_oas, "黄线 ≥ 3.75；红线 ≥ 4.25"),
             ("VIX", "VIXCLS", vix, "黄线 ≥ 28；红线 ≥ 30"),
-            ("NFCI", "NFCI", nfci, "黄/红线 ≥ 0"),
+            ("NFCI", "NFCI", nfci, "≥ 0 代表条件收紧"),
             ("初请4周均值", "ICSA", icsa_4w, "黄线 ≥ 230k；红线 ≥ 270k"),
             ("Sahm Rule", "SAHMREALTIME", sahm, "黄线 ≥ 0.40；红线 ≥ 0.50"),
+            ("失业率", "UNRATE", unrate, "黄线 ≥ 4.3；红线强化 ≥ 4.5"),
+            ("职位空缺率", "JTSJOR", jtsjor, "< 4.0 偏弱"),
+            ("离职率", "JTSQUR", jtsqur, "< 2.0 偏弱"),
+            ("核心资本货物订单", "NEWORDER", neworder, "结合近3个月趋势判断"),
+            ("实际零售销售", "RRSFS", rrsfs, "结合近3个月趋势判断"),
+            ("达拉斯商业活动", "BACTSAMFRBDAL", dallas, "< 0 偏弱"),
+            ("费城企业信心", "GACDFSA066MSFRBPHI", philly, "< 0 偏弱"),
+            ("纽约企业信心", "GACDISA066MSFRBNY", nyfed, "< 0 偏弱"),
         ]
     })
 
     return alerts
-
 
 def render_alert_board(alerts, data_dict):
     st.subheader("🚨 宏观警示看板")
@@ -930,13 +1314,106 @@ def render_alert_board(alerts, data_dict):
                         f"  <span style='color:gray'>{rule}｜更新时间：{metric_dt_text}</span>",
                         unsafe_allow_html=True
                     )
+                    
+def render_dollar_curve_component(data_dict, start_dt, end_dt, recession_periods):
+    """
+    专题图表：美元指数（左轴）+ 10Y-2Y 利差（右轴）+ 美国衰退阴影
+    """
+    dxy_df = data_dict.get("DTWEXBGS", pd.DataFrame())
+    spread_df = data_dict.get("T10Y2Y", pd.DataFrame())
 
+    if dxy_df.empty or spread_df.empty:
+        st.warning("美元指数或10Y-2Y利差暂无可用数据，无法生成专题图表。")
+        return
+
+    dxy_filtered = dxy_df[
+        (dxy_df.index >= start_dt) &
+        (dxy_df.index <= end_dt)
+    ]
+    spread_filtered = spread_df[
+        (spread_df.index >= start_dt) &
+        (spread_df.index <= end_dt)
+    ]
+
+    if dxy_filtered.empty or spread_filtered.empty:
+        st.warning("当前时间范围内，美元指数或10Y-2Y利差无数据。")
+        return
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # 左轴：美元指数
+    fig.add_trace(
+        go.Scatter(
+            x=dxy_filtered.index,
+            y=dxy_filtered["美元指数（Nominal Broad）"],
+            mode="lines",
+            line=dict(color=INDICATORS["DTWEXBGS"]["color"], width=2),
+            name="美元指数（Nominal Broad）",
+            hovertemplate="📅 日期: %{x}<br>💵 美元指数: %{y:.2f}<br><extra></extra>",
+        ),
+        secondary_y=False,
+    )
+
+    # 右轴：10Y-2Y 利差
+    fig.add_trace(
+        go.Scatter(
+            x=spread_filtered.index,
+            y=spread_filtered["10Y-2Y利差"],
+            mode="lines",
+            line=dict(color=INDICATORS["T10Y2Y"]["color"], width=2),
+            name="10Y-2Y利差",
+            hovertemplate="📅 日期: %{x}<br>📉 10Y-2Y利差: %{y:.2f}<br><extra></extra>",
+        ),
+        secondary_y=True,
+    )
+
+    # 利差零轴
+    fig.add_hline(
+        y=0,
+        line_dash="dot",
+        line_color="gray",
+        opacity=0.8,
+        secondary_y=True,
+    )
+
+    # 衰退阴影
+    fig = add_recession_shading(fig, recession_periods, start_dt, end_dt)
+
+    actual_start = min(dxy_filtered.index.min(), spread_filtered.index.min()).strftime("%Y-%m-%d")
+    actual_end = max(dxy_filtered.index.max(), spread_filtered.index.max()).strftime("%Y-%m-%d")
+
+    fig.update_layout(
+        title=f"美元指数 vs 10Y-2Y利差（{actual_start} 至 {actual_end}）",
+        hovermode="x unified",
+        template="plotly_white",
+        height=580,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.22,
+            xanchor="center",
+            x=0.5,
+        ),
+        margin=dict(l=70, r=70, t=70, b=90),
+    )
+
+    fig.update_xaxes(title_text="日期")
+    fig.update_yaxes(title_text="美元指数（Nominal Broad）", secondary_y=False)
+    fig.update_yaxes(title_text="10Y-2Y利差", secondary_y=True)
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    c1, c2 = st.columns(2)
+    c1.metric("最新美元指数", format_metric_value("DTWEXBGS", dxy_filtered.iloc[-1, 0]))
+    c2.metric("最新10Y-2Y利差", format_metric_value("T10Y2Y", spread_filtered.iloc[-1, 0]))
 # ====================== 主页面 ======================
-st.title("📊 宏观指标交互式监控仪表盘")
+st.title("📊 宏观指标监控仪表盘")
 st.divider()
 
 with st.spinner("正在拉取最新数据..."):
     data_dict = get_macro_data()
+    recession_df = get_us_recession_series()
+    recession_periods = build_recession_periods(recession_df)
     
 # ----------------------
 # 侧边栏：交互配置
@@ -950,7 +1427,7 @@ with st.sidebar:
         if not df.empty:
             all_dates.extend(df.index.tolist())
 
-    min_date = pd.to_datetime(min(all_dates)) if all_dates else pd.to_datetime("2018-01-01")
+    min_date = pd.to_datetime(min(all_dates)) if all_dates else pd.to_datetime("2000-01-01")
     max_date = pd.to_datetime(max(all_dates)) if all_dates else pd.to_datetime(date.today())
 
     start_date = st.date_input(
@@ -983,16 +1460,17 @@ with st.sidebar:
         format_func=lambda x: INDICATORS[x]["name"],
         default=[single_code],
     )
-
+    
 # ----------------------
 # 主体内容
 # ----------------------
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["📈 单个指标详情", "🔄 多指标叠加对比", "🚨 宏观警示看板", "🧭 情景分析"]
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["📈 单个指标详情", "🔄 多指标叠加对比", "🚨 宏观警示看板", "🧭 情景分析", "🧩 专题图表"]
 )
 
 with tab1:
     st.subheader(f"{INDICATORS[single_code]['name']} - 详情")
+    st.caption("灰色阴影区域表示美国经济衰退")
     st.caption(INDICATORS[single_code]["desc"])
 
     df_single = data_dict[single_code]
@@ -1021,7 +1499,8 @@ with tab1:
 
             actual_start = df_filtered.index.min().strftime("%Y-%m-%d")
             actual_end = df_filtered.index.max().strftime("%Y-%m-%d")
-
+            
+            fig = add_recession_shading(fig, recession_periods, start_dt, end_dt)
             fig.update_layout(
                 title=f"{INDICATORS[single_code]['name']}（实际数据区间：{actual_start} 至 {actual_end}）",
                 xaxis_title="日期",
@@ -1056,7 +1535,7 @@ with tab1:
 with tab2:
     st.subheader("多指标叠加对比")
     st.caption("支持多指标叠加，每个指标使用独立纵轴，鼠标悬停可查看各自数值")
-
+    st.caption("灰色阴影区域表示美国经济衰退")
     merged_df = merge_selected_data(selected_codes, data_dict)
     if not merged_df.empty:
         df_merged_filtered = merged_df[
@@ -1150,7 +1629,7 @@ with tab2:
 
                 actual_start = df_merged_filtered.index.min().strftime("%Y-%m-%d")
                 actual_end = df_merged_filtered.index.max().strftime("%Y-%m-%d")
-
+                fig = add_recession_shading(fig, recession_periods, start_dt, end_dt)
                 fig.update_layout(
                     title=f"多指标独立纵轴对比 ({actual_start} 至 {actual_end})",
                     xaxis=dict(
@@ -1193,15 +1672,22 @@ with tab4:
     st.subheader("📌 当前关键指标快照")
     snap_cols = st.columns(5)
     snapshot_items = [
-        ("Brent", "BRENT_OILPRICE"),
-        ("T5YIE", "T5YIE"),
-        ("5y5y近似", "T5YIFR"),
-        ("2年美债", "DGS2"),
-        ("HY OAS", "BAMLH0A0HYM2"),
-        ("VIX", "VIXCLS"),
-        ("NFCI", "NFCI"),
-        ("初请4周均值", "ICSA_4W"),
-        ("Sahm", "SAHMREALTIME"),
+    ("Brent", "BRENT_OILPRICE"),
+    ("T5YIE", "T5YIE"),
+    ("5y5y近似", "T5YIFR"),
+    ("总体PCE", "PCEPI"),
+    ("核心PCE", "PCEPILFE"),
+    ("2年美债", "DGS2"),
+    ("HY OAS", "BAMLH0A0HYM2"),
+    ("VIX", "VIXCLS"),
+    ("NFCI", "NFCI"),
+    ("失业率", "UNRATE"),
+    ("职位空缺率", "JTSJOR"),
+    ("离职率", "JTSQUR"),
+    ("初请4周均值", "ICSA_4W"),
+    ("Sahm", "SAHMREALTIME"),
+    ("订单3个月变化", "NEWORDER_3M"),
+    ("实际零售3个月变化", "RRSFS_3M"),
     ]
 
     for i, (label, code) in enumerate(snapshot_items):
@@ -1250,6 +1736,17 @@ with tab4:
     render_transition_watchlist(scenario_results)
     st.divider()
     render_scenario_details(scenario_results)
+
+with tab5:
+    st.subheader("专题图表：美元指数与期限利差")
+    st.caption("灰色阴影区域表示美国经济衰退；用于观察美元走强、期限利差变化与经济周期之间的关系。")
+
+    render_dollar_curve_component(
+        data_dict=data_dict,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        recession_periods=recession_periods,
+    )
     
 # 底部说明
 st.divider()
