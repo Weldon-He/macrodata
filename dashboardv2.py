@@ -1780,7 +1780,7 @@ with tab4:
     render_scenario_details(scenario_results)
 
 with tab5:
-    st.subheader("专题图表：美元指数与期限利差")
+    st.subheader("专题图表1：美元指数与期限利差")
     st.caption("灰色阴影区域表示美国经济衰退；用于观察美元走强、期限利差变化与经济周期之间的关系。")
 
     render_dollar_curve_component(
