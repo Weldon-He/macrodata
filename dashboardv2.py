@@ -516,6 +516,13 @@ def format_metric_value(code: str, value):
     if code == "REGIONAL_NEG_COUNT":
         return f"{int(value)}"
 
+    if code in {
+            "T5YIE", "T5YIFR", "DGS2", "BAMLH0A0HYM2", "VIXCLS", "NFCI",
+            "SAHMREALTIME", "PCEPI", "PCEPILFE", "UNRATE", "JTSJOR", "JTSQUR",
+            "DTWEXBGS", "T10Y2Y"
+            }:
+        return f"{value:.2f}"
+    
     return f"{value:.2f}"
 
 
@@ -531,6 +538,8 @@ def build_current_metrics(data_dict):
         "T5YIE": get_latest_value(data_dict, "T5YIE"),
         "T5YIFR": get_latest_value(data_dict, "T5YIFR"),
         "DGS2": get_latest_value(data_dict, "DGS2"),
+        "DTWEXBGS": get_latest_value(data_dict, "DTWEXBGS"),
+        "T10Y2Y": get_latest_value(data_dict, "T10Y2Y"),
         "BAMLH0A0HYM2": get_latest_value(data_dict, "BAMLH0A0HYM2"),
         "VIXCLS": get_latest_value(data_dict, "VIXCLS"),
         "NFCI": get_latest_value(data_dict, "NFCI"),
@@ -701,12 +710,16 @@ SCENARIOS = [
         {"metric": "RRSFS_3M", "op": ">", "value": 0, "weight": 1, "label": "实际零售3个月变化"},
         {"metric": "SAHMREALTIME", "op": "<", "value": 0.30, "weight": 2, "label": "Sahm"},
         {"metric": "BRENT_OILPRICE", "op": "<", "value": 95, "weight": 1, "label": "Brent"},
+        {"metric": "DTWEXBGS", "op": "<", "value": 120, "weight": 1, "label": "美元指数"},
+        {"metric": "T10Y2Y", "op": ">", "value": 0, "weight": 1, "label": "10Y-2Y利差"},
     ],
     "anti_rules": [
         {"metric": "BRENT_OILPRICE", "op": ">", "value": 105, "weight": -2, "label": "Brent"},
         {"metric": "T5YIE", "op": ">", "value": 2.70, "weight": -2, "label": "T5YIE"},
         {"metric": "VIXCLS", "op": ">", "value": 28, "weight": -2, "label": "VIX"},
         {"metric": "REGIONAL_NEG_COUNT", "op": ">=", "value": 2, "weight": -1, "label": "区域联储景气偏弱个数"},
+        {"metric": "DTWEXBGS", "op": ">=", "value": 122, "weight": -1, "label": "美元指数"},
+        {"metric": "T10Y2Y", "op": "<=", "value": 0, "weight": -1, "label": "10Y-2Y利差"},
     ],
     "hard_triggers": [],
     "hard_bonus": 0,
@@ -727,11 +740,14 @@ SCENARIOS = [
         {"metric": "SAHMREALTIME", "op": "<", "value": 0.30, "weight": 1, "label": "Sahm"},
         {"metric": "UNRATE", "op": "<", "value": 4.30, "weight": 1, "label": "失业率"},
         {"metric": "NFCI", "op": "<", "value": 0.20, "weight": 1, "label": "NFCI"},
+        {"metric": "DTWEXBGS", "op": ">=", "value": 118, "weight": 1, "label": "美元指数"},
+        {"metric": "T10Y2Y", "op": ">", "value": 0, "weight": 1, "label": "10Y-2Y利差"},
     ],
     "anti_rules": [
         {"metric": "T5YIFR", "op": ">=", "value": 2.50, "weight": -2, "label": "5y5y近似"},
         {"metric": "SAHMREALTIME", "op": ">=", "value": 0.50, "weight": -3, "label": "Sahm"},
         {"metric": "RRSFS_3M", "op": "<=", "value": 0, "weight": -1, "label": "实际零售3个月变化"},
+        {"metric": "T10Y2Y", "op": "<=", "value": 0, "weight": -1, "label": "10Y-2Y利差"},
     ],
     "hard_triggers": [],
     "hard_bonus": 0,
@@ -750,11 +766,13 @@ SCENARIOS = [
         {"metric": "JTSJOR", "op": ">=", "value": 4.20, "weight": 1, "label": "职位空缺率"},
         {"metric": "UNRATE", "op": "<=", "value": 4.10, "weight": 1, "label": "失业率"},
         {"metric": "VIXCLS", "op": "between", "low": 20, "high": 30, "weight": 1, "label": "VIX"},
+        {"metric": "DTWEXBGS", "op": ">=", "value": 120, "weight": 1, "label": "美元指数"},
     ],
     "anti_rules": [
         {"metric": "DGS2", "op": "<", "value": 3.50, "weight": -3, "label": "2年美债"},
         {"metric": "T5YIFR", "op": "<", "value": 2.40, "weight": -2, "label": "5y5y近似"},
         {"metric": "UNRATE", "op": ">=", "value": 4.40, "weight": -1, "label": "失业率"},
+        {"metric": "DTWEXBGS", "op": "<", "value": 118, "weight": -1, "label": "美元指数"},
     ],
     "hard_triggers": [],
     "hard_bonus": 0,
@@ -778,6 +796,8 @@ SCENARIOS = [
         {"metric": "NEWORDER_3M", "op": "<=", "value": 0, "weight": 1, "label": "核心资本货物订单3个月变化"},
         {"metric": "RRSFS_3M", "op": "<=", "value": 0, "weight": 1, "label": "实际零售3个月变化"},
         {"metric": "REGIONAL_NEG_COUNT", "op": ">=", "value": 2, "weight": 1, "label": "区域联储景气偏弱个数"},
+        {"metric": "DTWEXBGS", "op": ">=", "value": 120, "weight": 1, "label": "美元指数"},
+        {"metric": "T10Y2Y", "op": "between", "low": -0.25, "high": 0.50, "weight": 1, "label": "10Y-2Y利差"},
     ],
     "anti_rules": [
         {"metric": "BAMLH0A0HYM2", "op": ">=", "value": 5.00, "weight": -2, "label": "HY OAS"},
@@ -804,11 +824,13 @@ SCENARIOS = [
         {"metric": "RRSFS_3M", "op": "<=", "value": -1.0, "weight": 1, "label": "实际零售3个月变化"},
         {"metric": "REGIONAL_NEG_COUNT", "op": ">=", "value": 2, "weight": 1, "label": "区域联储景气偏弱个数"},
         {"metric": "JTSJOR", "op": "<", "value": 4.0, "weight": 1, "label": "职位空缺率"},
+        {"metric": "T10Y2Y", "op": "<=", "value": 0, "weight": 1, "label": "10Y-2Y利差"},
     ],
     "anti_rules": [
         {"metric": "SAHMREALTIME", "op": "<", "value": 0.40, "weight": -3, "label": "Sahm"},
         {"metric": "BAMLH0A0HYM2", "op": "<", "value": 4.00, "weight": -2, "label": "HY OAS"},
         {"metric": "UNRATE", "op": "<", "value": 4.20, "weight": -1, "label": "失业率"},
+        {"metric": "DTWEXBGS", "op": "<", "value": 118, "weight": -1, "label": "美元指数"},
     ],
     "hard_triggers": [
         [
@@ -831,6 +853,7 @@ SCENARIOS = [
         {"metric": "ICSA_4W", "op": ">=", "value": 300000, "weight": 1, "label": "初请4周均值"},
         {"metric": "UNRATE", "op": ">=", "value": 4.70, "weight": 1, "label": "失业率"},
         {"metric": "REGIONAL_NEG_COUNT", "op": ">=", "value": 3, "weight": 1, "label": "区域联储景气偏弱个数"},
+        {"metric": "DTWEXBGS", "op": ">=", "value": 122, "weight": 1, "label": "美元指数"},
     ],
     "anti_rules": [
         {"metric": "BAMLH0A0HYM2", "op": "<", "value": 4.50, "weight": -3, "label": "HY OAS"},
@@ -999,7 +1022,14 @@ def format_alert_value(code: str, value):
 
     if code in {"NEWORDER", "RSAFS", "RRSFS", "CSUSHPISA"}:
         return f"{value:,.2f}"
-
+    
+    if code in {
+            "T5YIE", "T5YIFR", "DGS2", "BAMLH0A0HYM2", "VIXCLS", "NFCI",
+            "SAHMREALTIME", "PCEPI", "PCEPILFE", "UNRATE", "JTSJOR", "JTSQUR",
+            "DTWEXBGS", "T10Y2Y"
+            }:
+        return f"{value:.2f}"
+    
     return f"{value:.2f}"
 
 
@@ -1018,6 +1048,8 @@ def build_alert_groups(data_dict):
     t5yie = get_latest_value(data_dict, "T5YIE")
     t5yifr = get_latest_value(data_dict, "T5YIFR")
     dgs2 = get_latest_value(data_dict, "DGS2")
+    dxy = get_latest_value(data_dict, "DTWEXBGS")
+    t10y2y = get_latest_value(data_dict, "T10Y2Y")
     hy_oas = get_latest_value(data_dict, "BAMLH0A0HYM2")
     vix = get_latest_value(data_dict, "VIXCLS")
     nfci = get_latest_value(data_dict, "NFCI")
@@ -1107,7 +1139,7 @@ def build_alert_groups(data_dict):
     # =========================================================
     # ② 政策暂停 / 更高更久
     # 主触发：2Y
-    # 二级确认：核心PCE / 失业率 / 职位空缺率 / 离职率
+    # 二级确认：核心PCE / 失业率 / 职位空缺率 / 离职率 / 美元指数
     # =========================================================
     labor_tight_signals = [
         unrate is not None and unrate <= 4.1,
@@ -1121,30 +1153,33 @@ def build_alert_groups(data_dict):
             (pce_core is not None and pce_core >= 2.9) or
             (t5yie is not None and t5yie >= 2.7)
         ) and
-        sum(labor_tight_signals) >= 1
+        (
+            sum(labor_tight_signals) >= 1 or
+            (dxy is not None and dxy >= 122)
+        )
     )
 
-    policy_yellow = (
-        dgs2 is not None and dgs2 >= 3.60 and
-        (
-            (pce_core is not None and pce_core >= 2.7) or
-            (t5yie is not None and t5yie >= 2.6) or
-            sum(labor_tight_signals) >= 2
-        )
-    ) and not policy_red
+    policy_yellow_signals = [
+        dgs2 is not None and dgs2 >= 3.60,
+        pce_core is not None and pce_core >= 2.7,
+        t5yie is not None and t5yie >= 2.6,
+        dxy is not None and dxy >= 120,
+        sum(labor_tight_signals) >= 2,
+    ]
+    policy_yellow = sum(policy_yellow_signals) >= 2 and not policy_red
 
     if policy_red:
         policy_status = "red"
         policy_headline = "红色：市场在定价“更久不降”甚至更鹰尾部"
-        policy_detail = "2年美债已逼近/突破高风险区，核心PCE与通胀预期仍偏高，且劳动力市场并未明显降温，政策宽松路径被明显打断。"
+        policy_detail = "2年美债已逼近/突破高风险区，核心PCE与通胀预期仍偏高，且劳动力市场或美元条件未明显缓和，政策宽松路径被明显打断。"
     elif policy_yellow:
         policy_status = "yellow"
         policy_headline = "黄色：政策处于暂停观察期"
-        policy_detail = "2年美债仍处高位，核心PCE与劳动力市场指标尚未给出足够宽松理由，市场仍在交易“暂停更久”。"
+        policy_detail = "2年美债仍处高位，核心PCE、劳动力市场与美元指数至少有两项仍偏紧，市场仍在交易“暂停更久”。"
     else:
         policy_status = "green"
         policy_headline = "绿色：政策约束有所缓和"
-        policy_detail = "2年美债和核心PCE均较温和，劳动力市场也有降温迹象，市场对宽松路径的信心有所修复。"
+        policy_detail = "2年美债、核心PCE与美元指数均较温和，劳动力市场也有降温迹象，市场对宽松路径的信心有所修复。"
 
     alerts.append({
         "title": "② 政策暂停 / 更高更久",
@@ -1153,6 +1188,7 @@ def build_alert_groups(data_dict):
         "detail": policy_detail,
         "monitors": [
             ("2年美债", "DGS2", dgs2, "红线 ≥ 3.85；缓和参考 < 3.50"),
+            ("美元指数（广义）", "DTWEXBGS", dxy, "黄线 ≥ 120；红线强化 ≥ 122"),
             ("核心PCE同比", "PCEPILFE", pce_core, "红线 ≥ 2.9；关注线 ≥ 2.7"),
             ("失业率", "UNRATE", unrate, "低于 4.1 代表就业仍偏紧"),
             ("职位空缺率", "JTSJOR", jtsjor, "高于 4.2 偏紧"),
@@ -1160,7 +1196,7 @@ def build_alert_groups(data_dict):
             ("T5YIE", "T5YIE", t5yie, "通胀预期偏高会抬高政策约束"),
         ]
     })
-
+    
     # =========================================================
     # ③ 信用 / 增长扩散
     # 主触发：HY OAS / VIX / NFCI / ICSA / Sahm
@@ -1172,6 +1208,7 @@ def build_alert_groups(data_dict):
         nfci is not None and nfci >= 0,
         icsa_4w is not None and icsa_4w >= 270000,
         sahm is not None and sahm >= 0.50,
+        t10y2y is not None and t10y2y <= -0.25,
     ]
 
     spread_yellow_signals = [
@@ -1180,6 +1217,7 @@ def build_alert_groups(data_dict):
         nfci is not None and nfci >= 0,
         icsa_4w is not None and icsa_4w >= 230000,
         sahm is not None and sahm >= 0.40,
+        t10y2y is not None and t10y2y <= 0,
     ]
 
     growth_confirm_signals = [
@@ -1189,6 +1227,7 @@ def build_alert_groups(data_dict):
         neworder_3m is not None and neworder_3m <= 0,
         rrsfs_3m is not None and rrsfs_3m <= 0,
         regional_neg_count >= 2,
+        t10y2y is not None and t10y2y <= 0,
     ]
 
     spread_red = (
@@ -1223,6 +1262,7 @@ def build_alert_groups(data_dict):
             ("HY OAS", "BAMLH0A0HYM2", hy_oas, "黄线 ≥ 3.75；红线 ≥ 4.25"),
             ("VIX", "VIXCLS", vix, "黄线 ≥ 28；红线 ≥ 30"),
             ("NFCI", "NFCI", nfci, "≥ 0 代表条件收紧"),
+            ("10Y-2Y利差", "T10Y2Y", t10y2y, "黄线 ≤ 0；红线强化 ≤ -0.25"),
             ("初请4周均值", "ICSA", icsa_4w, "黄线 ≥ 230k；红线 ≥ 270k"),
             ("Sahm Rule", "SAHMREALTIME", sahm, "黄线 ≥ 0.40；红线 ≥ 0.50"),
             ("失业率", "UNRATE", unrate, "黄线 ≥ 4.3；红线强化 ≥ 4.5"),
@@ -1672,22 +1712,24 @@ with tab4:
     st.subheader("📌 当前关键指标快照")
     snap_cols = st.columns(5)
     snapshot_items = [
-    ("Brent", "BRENT_OILPRICE"),
-    ("T5YIE", "T5YIE"),
-    ("5y5y近似", "T5YIFR"),
-    ("总体PCE", "PCEPI"),
-    ("核心PCE", "PCEPILFE"),
-    ("2年美债", "DGS2"),
-    ("HY OAS", "BAMLH0A0HYM2"),
-    ("VIX", "VIXCLS"),
-    ("NFCI", "NFCI"),
-    ("失业率", "UNRATE"),
-    ("职位空缺率", "JTSJOR"),
-    ("离职率", "JTSQUR"),
-    ("初请4周均值", "ICSA_4W"),
-    ("Sahm", "SAHMREALTIME"),
-    ("订单3个月变化", "NEWORDER_3M"),
-    ("实际零售3个月变化", "RRSFS_3M"),
+        ("Brent", "BRENT_OILPRICE"),
+        ("美元指数", "DTWEXBGS"),
+        ("10Y-2Y利差", "T10Y2Y"),
+        ("T5YIE", "T5YIE"),
+        ("5y5y近似", "T5YIFR"),
+        ("总体PCE", "PCEPI"),
+        ("核心PCE", "PCEPILFE"),
+        ("2年美债", "DGS2"),
+        ("HY OAS", "BAMLH0A0HYM2"),
+        ("VIX", "VIXCLS"),
+        ("NFCI", "NFCI"),
+        ("失业率", "UNRATE"),
+        ("职位空缺率", "JTSJOR"),
+        ("离职率", "JTSQUR"),
+        ("初请4周均值", "ICSA_4W"),
+        ("Sahm", "SAHMREALTIME"),
+        ("订单3个月变化", "NEWORDER_3M"),
+        ("实际零售3个月变化", "RRSFS_3M"),
     ]
 
     for i, (label, code) in enumerate(snapshot_items):
